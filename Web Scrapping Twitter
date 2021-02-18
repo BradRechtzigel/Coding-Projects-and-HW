@@ -1,5 +1,583 @@
-1a
-a
-a
+---
+title: "STAT345WriteUp"
+author: "Jacob Brown, Brad Rechtzigel"
+date: "May 10, 2019"
+output: html_document
+---
 
-a
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+##1 Load Packages
+```{r message=FALSE, error=FALSE}
+source("SourceKeyForFinal.R")
+library(twitteR)
+library(rtweet)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(usmap)
+library(mapdata)
+library(ggmap)
+library(stringr)
+library(syuzhet)
+library(plotly)
+library(janeaustenr)
+library(tidytext)
+library(sentimentr)
+library(devtools)
+library(SnowballC)
+library(tm)
+library(ngram)
+library(wordcloud)
+library(reshape2)
+```
+
+
+```{r message=FALSE}
+#Getting tweets
+twitter_token <- create_token(app = "Giannis STAT 345", consumer_key, consumer_secret, access_token, access_secret)
+giannis <- search_tweets('Giannis', n = 20000, include_rts = FALSE) # New Tweets every time
+harden <- search_tweets("Harden", n = 20000, include_rts = FALSE)
+
+giannis2 <- giannis
+Giannis <- giannis
+Giannis2 <- giannis
+
+harden2 <- harden
+Harden <- harden
+Harden2 <- harden
+nrow(giannis)
+nrow(harden)
+```
+
+#Make a timeline to see when popular times are
+```{r message=FALSE}
+tmls <- get_timelines(c("NBA", "BR_NBA", "Bucks", "espn"), n = 10000)
+
+tmls %>%
+  dplyr::filter(created_at > "2019-4-20") %>%
+  dplyr::group_by(screen_name) %>%
+  ts_plot("10 hours", trim = 1L) +
+  ggplot2::geom_point() +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    legend.title = ggplot2::element_blank(),
+    legend.position = "bottom",
+    plot.title = ggplot2::element_text(face = "bold")) +
+  ggplot2::labs(
+    x = NULL, y = NULL,
+ title = "Frequency of Twitter statuses posted by Sports organization",
+    subtitle = "Twitter status (tweet) counts aggregated by day from late April 2019",
+    caption = "\nSource: Data collected from Twitter's REST API via rtweet"
+  )
+
+```
+
+
+#Detect Giannis and what accounts are talking about him
+```{r message=FALSE}
+tmls.1 <- tmls %>% filter(str_detect(text, "Giannis"))
+
+tmls.1 %>%
+  dplyr::filter(created_at > "2019-4-20") %>%
+  dplyr::group_by(screen_name) %>%
+  ts_plot("10 hours", trim = 1L) +
+  ggplot2::geom_point() +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    legend.title = ggplot2::element_blank(),
+    legend.position = "bottom",
+    plot.title = ggplot2::element_text(face = "bold")) +
+  ggplot2::labs(
+    x = NULL, y = NULL,
+    title = "Frequency of Twitter statuses about Giannis posted by Sports organization",
+    subtitle = "Twitter status (tweet) counts aggregated by day from late April 2019",
+    caption = "\nSource: Data collected from Twitter's REST API via rtweet"
+  )
+
+```
+
+```{r message=FALSE}
+tmls.2 <- tmls %>% filter(str_detect(text, "Harden"))
+
+tmls.2 %>%
+  dplyr::filter(created_at > "2019-4-20") %>%
+  dplyr::group_by(screen_name) %>%
+  ts_plot("10 hours", trim = 1L) +
+  ggplot2::geom_point() +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    legend.title = ggplot2::element_blank(),
+    legend.position = "bottom",
+    plot.title = ggplot2::element_text(face = "bold")) +
+  ggplot2::labs(
+    x = NULL, y = NULL,
+    title = "Frequency of Twitter statuses about Harden posted by Sports organization",
+    subtitle = "Twitter status (tweet) counts aggregated by day from late April 2019",
+    caption = "\nSource: Data collected from Twitter's REST API via rtweet"
+  )
+
+```
+
+#Find the most used words remove non important words
+
+```{r message=FALSE}
+# Replace @UserName
+Giannis3 <- Giannis
+Giannis3$text1 <- gsub("@\\w+", "", Giannis3$text)
+# Remove punctuation
+Giannis3$text1 <- gsub("[[:punct:]]", "", Giannis3$text1)
+# Remove links
+
+Giannis3$text1 <- gsub("https.*", "", Giannis3$text1)
+# Remove tabs
+Giannis3$text1 <- gsub("[ |\t]{2,}", "", Giannis3$text1)
+# Remove blank spaces at the beginning
+Giannis3$text1 <- gsub("^ ", "", Giannis3$text1)
+# Remove blank spaces at the end
+Giannis3$text1 <- gsub(" $", "", Giannis3$text1)
+#
+# #convert all text to lower case
+Giannis3$text1 <- gsub("[0-9]", "", Giannis$text)
+
+Giannistweets_clean <- Giannis3 %>%
+select(text1) %>%
+  unnest_tokens(word, text1)
+
+
+Giannistweets_clean %>%
+  count(word, sort = TRUE) %>%
+  top_n(15) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x = word, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "Unique words",
+      title = "Count of unique words found in Giannis tweets")
+
+```
+
+ 
+ 
+ 
+```{r message=FALSE}
+Harden3 <- Harden
+Harden3$text1 <- gsub("@\\w+", "", Harden3$text)
+# Remove punctuation
+Harden3$text1 <- gsub("[[:punct:]]", "", Harden3$text1)
+# Remove links
+
+Harden3$text1 <- gsub("https.*", "", Harden3$text1)
+# Remove tabs
+Harden3$text1 <- gsub("[ |\t]{2,}", "", Harden3$text1)
+# Remove blank spaces at the beginning
+Harden3$text1 <- gsub("^ ", "", Harden3$text1)
+# Remove blank spaces at the end
+Harden3$text1 <- gsub(" $", "", Harden3$text1)
+
+
+Hardentweets_clean <- Harden3 %>%
+select(text1) %>%
+  unnest_tokens(word, text1)
+
+
+Hardentweets_clean %>%
+  count(word, sort = TRUE) %>%
+  top_n(15) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x = word, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "Unique words",
+      title = "Count of unique words found in Harden tweets")
+
+
+data("stop_words")
+Hardentweets_clean2 <- Hardentweets_clean %>% anti_join(stop_words)
+
+
+
+
+Hardentweets_clean2 %>%
+  count(word, sort = TRUE) %>%
+  top_n(15) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(x = word, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(y = "Count",
+      x = "Unique words",
+      title = "Count of unique words found in Harden tweets",
+      subtitle = "Stop words removed from the list")
+```
+
+
+# Create our own sentiment for basketball terms
+
+```{r message=FALSE}
+ text1<- Giannis$text
+head(text1)
+text1 <- gsub("http.*","",text1)
+ 
+text1 <- gsub("https.*","",text1)
+ 
+text1 <- gsub("#.*","",text1)
+ 
+head(text1)
+
+MVP <- length(grep(text1,pattern= "mvp"))
+
+
+beast <- length(grep(text1,pattern= "beast"))
+overrated <- length(grep(text1,pattern= "overrated"))
+freak <- length(grep(text1,pattern= "freak"))
+underrated <- length(grep(text1,pattern= "underrated"))
+amazing <- length(grep(text1,pattern= "amazing"))
+best <- length(grep(text1,pattern= "best"))
+unstoppable <- length(grep(text1,pattern= "unstoppable"))
+
+text2 <-Harden$text
+MVP2 <- length(grep(text2,pattern= "mvp"))
+beast2 <- length(grep(text2,pattern= "beast"))
+overrated2 <- length(grep(text2,pattern= "overrated"))
+freak2 <- length(grep(text2,pattern= "freak"))
+underrated2 <- length(grep(text1,pattern= "underrated"))
+amazing2 <- length(grep(text2,pattern= "amazing"))
+best2 <- length(grep(text2,pattern= "best"))
+unstoppable2 <- length(grep(text2,pattern= "unstoppable"))
+
+OurWords <- data.frame("Count for Giannis" = c(MVP,beast,overrated,freak,underrated,amazing,best,unstoppable), "Name" = c("Mvp", "beast", "overrated", "freak", "underrated", "amazing", "best", "unstoppable"))
+
+OurWords2 <- data.frame("Count for Harden" = c(MVP2,beast2,overrated2,freak2,underrated2,amazing2,best2,unstoppable2))
+
+
+OurWords3 <-data.frame(OurWords,OurWords2)
+OurWords4 <- rbind(OurWords3$Count.for.Giannis, OurWords3$Count.for.Harden)
+
+barplot(OurWords4, main="Words of Giannis vs Harden",names.arg=c("Mvp", "beast", "over","freak", "under", "amaz","best", "unstop"),
+  xlab="Words", col=c("darkgreen","red"),
+       legend = c("Giannis", "Harden") ,ylab = "Count", beside=TRUE)
+```
+
+
+
+Ploting across the US, see what states are tweeting the most and postive or negative sentiment
+
+```{r message=FALSE}
+#Distribution of top 20 giannis locations'
+Giannis$location2<- gsub("USA", "", Giannis$location)
+Giannis$location3<- gsub("[[:punct:]]", "", Giannis$location2)
+Giannis$location3<- gsub("^ ", "", Giannis$location2)
+Giannis$location3<- gsub(" $", "", Giannis$location2)
+
+
+Giannis$location4 <- ifelse(Giannis$location3 == "", NA, Giannis$location3)
+
+
+Giannis %>%
+  count(location4) %>%
+  mutate(location4 = reorder(location4, n)) %>%
+  na.omit() %>%
+  top_n(20) %>%
+  ggplot(aes(x = location4, y = n)) +
+  geom_col() +
+  coord_flip() +
+      labs(x = "Location",
+      y = "Count",
+      title = "Where Twitter users are from - unique locations ")
+```
+
+
+
+```{r message=FALSE}
+state_abrs <- c("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY")
+state_names <- c("alabama", "alaska","arizona", "arkansas","california", "colorado", "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan", "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire", "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio", "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota", "tennessee", "texas", "utah", "vermont", "virgina", "washington", "west virginia", "wisconsin", "wyoming")
+
+
+#finding all giannis2 tweets with a state abreviation in them
+giannis2$state <- rep(NA, times = nrow(giannis2) )
+state_finder2 <- function(state_abr, dat = giannis2$location) {
+  grep_states <- grep(dat, pattern = state_abr)
+  giannis2$state[grep_states] = state_abr
+  
+  return(giannis2$state)
+}
+
+#combining all states into a single vector for giannis2
+all_states_nas2 <- sapply(state_abrs,state_finder2)
+
+get_states2 <- function(row) {
+  state <-na.omit(all_states_nas2[row,])[1]
+  return(state)
+}
+
+
+state_location2 <- sapply(1:nrow(all_states_nas2), get_states2)
+giannis2$state2 <- as.vector(state_location2)#final vector of state location of each giannis2 tweet
+
+length(which(is.na(giannis2$state2) == FALSE))/nrow(giannis2)#proportion of giannis2 tweets with state location 
+
+```
+
+
+
+
+```{r message=FALSE}
+
+state_count <- function(state_abr, dat) {
+  len <- as.numeric(length(which(dat$state2 == state_abr)))
+  return(len)
+}
+
+
+#plotting US map of giannis tweets
+state_counts2 <-sapply(state_abrs,state_count,giannis2)
+
+state_and_count2 <- data.frame(state_abrs,state_counts2,state_names)
+state_and_count2$region <- state_and_count2$state_names
+
+
+all_state <- map_data("state")
+
+total2 <- merge(all_state,state_and_count2, by = "region")
+
+
+map_giannis2 <- ggplot() + geom_map(data=all_state, map=all_state,
+                    aes(x=long, y=lat, map_id=region),
+                    fill="#ffffff", color="#ffffff", size=0.15) + 
+  geom_map(data=state_and_count2, map= all_state,
+                    aes(fill=state_counts2, map_id=region),
+                    color="#ffffff", size=0.15) + 
+  scale_fill_continuous(low='thistle2', high='darkgreen', 
+                                 guide='colorbar') +
+  theme_bw()  + labs(fill = "Number of Tweets" 
+                            ,title = "Giannis Tweets by State", x="", y="")
+map_giannis2 <- map_giannis2 + scale_y_continuous(breaks=c()) + scale_x_continuous(breaks=c()) + theme(panel.border =  element_blank())
+map_giannis2
+```
+
+```{r message=FALSE}
+
+#finding all harden2 tweets with a state abreviation in them
+harden2$state <- rep(NA, times = nrow(harden2))
+state_finder_harden2 <- function(state_abr, dat = harden2$location) {
+  grep_states <- grep(dat, pattern = state_abr)
+  harden2$state[grep_states] = state_abr
+  
+  return(harden2$state)
+}
+
+#combining all states into a single vector for harden
+all_states_nas_harden2 <- sapply(state_abrs,state_finder_harden2)
+get_states_harden2 <- function(row) {
+  state <-na.omit(all_states_nas_harden2[row,])[1]
+  return(state)
+}
+state_location_harden2 <- sapply(1:nrow(all_states_nas_harden2), get_states_harden2)
+harden2$state2 <- as.vector(state_location_harden2)#final vector of state location of each harden tweet
+
+length(which(is.na(harden2$state2) == FALSE))/nrow(harden2)#proportion of harden tweets with state location 
+
+```
+
+
+```{r message=FALSE}
+#plotting US map of harden2 tweets
+state_counts_harden2 <-sapply(state_abrs,state_count,harden2)
+
+state_and_count_harden2 <- data.frame(state_abrs,state_counts_harden2,state_names)
+state_and_count_harden2$region <- state_and_count_harden2$state_names
+
+
+map_harden2 <- ggplot() + geom_map(data=all_state, map=all_state,
+                    aes(x=long, y=lat, map_id=region),
+                    fill="#ffffff", color="#ffffff", size=0.15) + 
+  geom_map(data=state_and_count_harden2, map= all_state,
+                    aes(fill=state_counts_harden2, map_id=region),
+                    color="#ffffff", size=0.15) + 
+  scale_fill_continuous(low='thistle2', high='darkred', 
+                                 guide='colorbar') +
+  theme_bw()  + labs(fill = "Number of Tweets" 
+                            ,title = "Harden Tweets by State", x="", y="")
+map_harden2 <- map_harden2 + scale_y_continuous(breaks=c()) + scale_x_continuous(breaks=c()) + theme(panel.border =  element_blank())
+map_harden2
+
+```
+
+
+Find the most postive and negative tweet and show this to the class so they understand the sentiment 
+
+```{r message=FALSE}
+
+text1 <- str_replace_all(Giannis3$text1, "[^[:alnum:]]", " ")
+word.df <- as.vector(text1)
+
+
+
+emotion.df <- get_nrc_sentiment(word.df)
+
+
+
+
+sent.value <- get_sentiment(word.df)
+giannis2$sent.value <- sent.value
+#Most positive tweet
+most.postive <- word.df[sent.value == max(sent.value)]
+
+
+#Most negative tweet
+most.negative <- word.df[sent.value<= min(sent.value)]
+
+
+positive.tweets <- word.df[sent.value>0]
+negative.tweets <- word.df[sent.value <0]
+neutral.tweets <-  word.df[sent.value == 0]
+
+
+
+category_senti <- ifelse(sent.value < 0, "Negative", ifelse(sent.value > 0, "Positive", "Neutral"))
+
+
+category_senti2 <- cbind(text2,category_senti,sent.value)
+
+
+
+emo_bar2 <- colSums(emotion.df)
+emo_sum2 <- data.frame(count= emo_bar2, emotion = names(emo_bar2))
+
+
+ plot_ly(emo_sum2, x=~emotion, y=~count, type="bar", color=~emotion) %>%
+  layout(xaxis=list(title=""), showlegend=FALSE,
+         title="Emotion Type for Giannis")
+```
+
+
+
+```{r message=FALSE}
+text2 <- str_replace_all(Harden3$text1, "[^[:alnum:]]", " ")
+word.df2 <- as.vector(text2)
+
+
+
+emotion.df2 <- get_nrc_sentiment(word.df2)
+
+
+
+
+sent.value2 <- get_sentiment(word.df2)
+harden2$sent.value <- sent.value2
+#Most positive tweet
+most.postive2 <- word.df2[sent.value2 == max(sent.value2)]
+
+
+
+#Most negative tweet
+most.negative2 <- word.df2[sent.value2<= min(sent.value2)]
+
+
+
+positive.tweets2 <- word.df2[sent.value2>0]
+
+negative.tweets2 <- word.df2[sent.value2 <0]
+
+neutral.tweets2 <-  word.df2[sent.value2 == 0]
+
+
+
+category_senti3 <- ifelse(sent.value2 < 0, "Negative", ifelse(sent.value2 > 0, "Positive", "Neutral"))
+
+
+
+emo_bar3 <- colSums(emotion.df2)
+emo_sum3 <- data.frame(count= emo_bar3, emotion = names(emo_bar3))
+
+
+plot_ly(emo_sum3, x=~emotion, y=~count, type="bar", color=~emotion) %>%
+  layout(xaxis=list(title=""), showlegend=FALSE,
+         title="Emotion Type for Harden")
+
+
+```
+
+Sentiment Ploting different version 
+
+```{r message=FALSE}
+
+Giannistweets_clean %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("gray20", "gray80"),
+                   max.words = 90)
+
+Hardentweets_clean %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  acast(word ~ sentiment, value.var = "n", fill = 0) %>%
+  comparison.cloud(colors = c("gray20", "gray80"),
+                   max.words = 90)
+```
+
+
+##5 
+
+```{r message=FALSE}
+#state means for sentiment with plot for giannis
+get_mean_sent2 <- function(state_ab, dat) {
+  df <- which(giannis2$state2 == state_ab)
+  dataf <- dat[df,]
+  mean(dataf$sent.value)
+}
+
+all_mean_sent2 <- sapply(state_abrs,get_mean_sent2, giannis2)
+state_and_count2$mean_sentiment <- all_mean_sent2
+
+map_giannis_sent2 <- ggplot() + geom_map(data=all_state, map=all_state,
+                    aes(x=long, y=lat, map_id=region),
+                    fill="#ffffff", color="#ffffff", size=0.15) + 
+  geom_map(data=state_and_count2, map= all_state,
+                    aes(fill=mean_sentiment, map_id=region),
+                    color="#ffffff", size=0.15) + 
+  scale_fill_continuous(low='thistle2', high='darkgreen', 
+                                 guide='colorbar') +
+  theme_bw()  + labs(fill = "Sentiment of Tweets" 
+                            ,title = "Giannis Sentiment by State", x="", y="")
+map_giannis_sent2 <- map_giannis_sent2 + scale_y_continuous(breaks=c()) + scale_x_continuous(breaks=c()) + theme(panel.border =  element_blank())
+map_giannis_sent2
+
+
+
+
+#state means for sentiment with plot for harden
+get_mean_sent_harden2 <- function(state_ab, dat) {
+  df <- which(harden2$state2 == state_ab)
+  dataf <- dat[df,]
+  mean(dataf$sent.value)
+}
+
+
+all_mean_sent_har2 <- sapply(state_abrs,get_mean_sent_harden2, harden2)
+state_and_count_harden2$mean_sentiment <- all_mean_sent_har2
+
+map_harden_sent2 <- ggplot() + geom_map(data=all_state, map=all_state,
+                    aes(x=long, y=lat, map_id=region),
+                    fill="#ffffff", color="#ffffff", size=0.15) + 
+  geom_map(data=state_and_count_harden2, map= all_state,
+                    aes(fill=mean_sentiment, map_id=region),
+                    color="#ffffff", size=0.15) + 
+  scale_fill_continuous(low='thistle2', high='darkred', 
+                                 guide='colorbar') +
+  theme_bw()  + labs(fill = "Sentiment of Tweets" 
+                            ,title = "Harden Sentiment by State", x="", y="")
+map_harden_sent2 <- map_harden_sent2 + scale_y_continuous(breaks=c()) + scale_x_continuous(breaks=c()) + theme(panel.border =  element_blank())
+map_harden_sent2
+
+```
