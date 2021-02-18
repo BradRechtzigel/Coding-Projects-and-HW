@@ -1,0 +1,245 @@
+#
+# This is the user-interface definition of a Shiny web application. You can
+# run the application by clicking 'Run App' above.
+#
+# Find out more about building applications with Shiny here:
+#
+#    http://shiny.rstudio.com/
+#
+#Packages
+library(shiny)
+library(rsconnect)
+library(readr)
+library(httr)
+library(shinyWidgets)
+library(tidyverse)
+library(leaflet)
+library(ggplot2)
+library(plotly)
+library(ggthemes)
+library(lubridate)
+library(dplyr)
+library(plyr)
+library(DT)
+library(maps)
+# 
+# rsconnect::setAccountInfo(name='bradrex',
+#                           token='745287FD6D09D8DF87703CB1CBB40DF5',
+#                           secret='t4ZkrRbS2YdS41VcWUR3B/KH2Lu4sHjwxMyI4ZFT')
+
+#rsconnect::deployApp('path/to/your/app')
+
+#Data from the CDC
+
+Recovered <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/archived_data/archived_time_series/time_series_19-covid-Recovered_archived_0325.csv")
+Deaths <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/archived_data/archived_time_series/time_series_19-covid-Deaths_archived_0325.csv")
+ConfirmedCases <- read_csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/archived_data/archived_time_series/time_series_19-covid-Confirmed_archived_0325.csv")
+
+a <- seq( mdy("01-22-2020") , mdy("03-21-2020"), by= "days")
+
+
+urls <- paste("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/", format(a,"%m-%d-%Y"),".csv", sep="")
+urls
+
+New <- sapply(urls, read_csv)
+
+Final <- ldply(New,rbind)
+head(Final$.id)
+Final2 <- Final
+
+
+
+Final$.id <- Final$.id %>% str_replace_all("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/", "") %>% str_replace_all(".csv","") %>% mdy()
+
+range<-  1:length(Deaths$`Province/State`)
+for(i in range) {
+    if (is.na(Final$`Province/State`[i]== T)) {
+        Final$`Province/State`[i] <- Final$`Country/Region`[i] 
+    }}
+Final2 <- Final %>% drop_na(Deaths)
+Final3 <- Final %>% drop_na(Confirmed)
+Final4 <- Final %>% drop_na(Recovered)
+
+Dea <- aggregate(Final2["Deaths"], by=Final2[".id"], sum)
+Conf <- aggregate(Final3["Confirmed"], by=Final3[".id"], sum)
+Recov <- aggregate(Final4["Recovered"], by=Final4[".id"], sum)
+Plottime <- cbind(Dea,Conf,Recov)
+Plottime <- Plottime[,c(-3,-5)]
+Plottime$Date <- Plottime$.id
+
+
+range<-  1:length(Deaths$`Province/State`)
+range2 <- 1:length(Recovered$`Province/State`)
+for(i in range) {
+    if (is.na(Deaths$`Province/State`[i]== T)) {
+        Deaths$`Province/State`[i] <- Deaths$`Country/Region`[i] 
+    }
+    if (is.na(ConfirmedCases$`Province/State`[i]== T)) {
+        ConfirmedCases$`Province/State`[i] <- ConfirmedCases$`Country/Region`[i] 
+    }}
+for(i in range2) {
+    if (is.na(Recovered$`Province/State`[i]== T)) {
+        Recovered$`Province/State`[i] <- Recovered$`Country/Region`[i] 
+    }
+}
+#Leafletplot idea
+NEw <- ConfirmedCases %>% select(`Province/State`, `Country/Region`,Lat,Long,"3/22/20")
+NEw$`3/22/20`
+Mapp<-uncount(NEw, `3/22/20`, .remove = TRUE, .id = NULL)
+
+Deaths1 <- Deaths %>% gather( "Date","Deaths", 5:66)
+Conf12 <- ConfirmedCases %>% gather( "Date","Confirmed", 5:66) 
+Recov12 <- Recovered  %>% gather( "Date","Recovered", 5:66)
+Complete <- cbind(Conf12,Deaths1[,c(6)],Recov12[,c(6)])
+Complete$Date <-mdy(Complete$Date)
+
+CONF <-Complete %>% filter(`Country/Region`=="US") 
+USA <- read.csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv")
+
+USA$date <- ymd(USA$date)
+USA2 <- USA %>% filter(date == "2020-03-21")
+
+# We load the geospatial data for the states
+# (there are more options to the map_data function, 
+# if you are intrested in taking a look).
+states <- map_data("state")
+
+
+sim_data <- data.frame(region=unique(states$region), Percent.Turnout=match(unique(states$region), unique(states$region)))
+sim_data$state <-sim_data$region
+
+USA3 <- right_join(sim_data,USA2,by="state")
+USA3 <- USA3[,3:7]
+USA3$region <- USA3$state
+USA3 <- USA3[-c(9,12,41,49),]
+USA3$region <- tolower(USA3$region)
+
+# Then we merge our dataset with the geospatial data:
+sim_data_geo <-merge(states, USA3, by="region")
+# The following should give us the plot without the numbers: 
+# qplot(long, lat, data=sim_data_geo, geom="polygon", fill=cases, group=group)
+# snames <- data.frame(region=tolower(state.name), long=state.center$x, lat=state.center$y)
+# Then again, we need to join our original dataset 
+# # to get the value that should be printed at the center.
+# snames <- merge(snames, sim_data, by="region")
+# snames$cases <- USA3$cases
+# And finally, to put everything together: 
+#ggplot(sim_data_geo, aes(long, lat)) + geom_polygon(aes(group=group, fill=cases)) + geom_text(data=snames, aes(long, lat, label=cases))
+
+snames <- data.frame(region=tolower(state.name), long=state.center$x, lat=state.center$y)
+snames <- merge(snames, USA3, by="region")
+
+# map_ab <- ggplot() + geom_map(data=states, map=states,
+#                               aes(x=long, y=lat, map_id=region),
+#                               fill="#ffffff", color="#ffffff", size=0.15) + 
+#     geom_map(data=USA3, map= states,
+#              aes(fill=cases, map_id=region),
+#              color="#ffffff", size=0.15) + 
+#     scale_fill_continuous(low='thistle2', high='#0072B2', 
+#                           guide='colorbar') +
+#     theme_bw()  + labs(fill = "Number of Tweets" 
+#                        ,title = "Cases By State", x="", y="") + geom_text(data=snames, aes(long,lat,label=cases))
+# map_ab <- map_ab + scale_y_continuous(breaks=c()) + scale_x_continuous(breaks=c()) + theme(panel.border =  element_blank())
+
+ui <- fluidPage(
+    titlePanel("Coronavirus Outbreak"),
+    
+    mainPanel(
+        h2("Background/World Update"),
+        h4("The first known case of COVID-19 or Cornonavirus was found in Wuhan, China sometime in late December 2019. However worldwide data was not collected until the 22nd of January 2020. Since then it has spread almost everywhere. The totals are listed below."),
+        h2("World Totals"),
+        DT::dataTableOutput("tab"),
+        h4("This outbreak has spread rapidly around the world which can be seen in the plot below"),
+        h2("Map of all locations with Coronavirus"),
+        h4("Each cluster shows how many confirmed cases are in that blue area. Double Click on the Plot to zoom in on an area."),
+        leafletOutput("mymap"),
+        h2("This is how the cases are progressing throughout the World"),
+        DT::dataTableOutput("table1"),
+        h2("Model of how the cases are progressing throughout the World"),
+        plotlyOutput("plot1"),
+        h2("How The United States Has Been Affected"),
+        DT::dataTableOutput("table"),
+        h1("Cases by State Map"),
+        h4("As we can see there are cases in every state however, New York has almost 6x the next closest."),
+        h4("The two numbers off the map are representing Alaska and Hawaii."),
+        plotOutput("usamap")
+    ))
+
+
+server <- function(input, output, session) {
+    
+    output$tab <- DT::renderDataTable(
+        {
+            Plottime %>% filter(Date == "2020-03-21")%>%mutate(`Active Cases`= Confirmed- (Recovered+Deaths))%>% select(Confirmed,Recovered,Deaths,`Active Cases`)%>% DT::datatable(rownames = "March 21st, 2020", options = list(sDom  = 't',lengthChange = FALSE)) %>% formatStyle('Confirmed',
+                                                                                                                                                                                                                                                                                     backgroundColor =styleEqual(c(304528), c('yellow'))) %>%formatStyle('Recovered',
+                                                                                                                                                                                                                                                                                                                                                         backgroundColor =styleEqual(c(91676), c('#90EE90'))) %>% formatStyle("Deaths", backgroundColor =styleEqual(c(12973), c('#ffcccb')))
+            
+        })
+    output$mymap <- renderLeaflet({
+        
+        NEw <- ConfirmedCases %>% select(`Province/State`, `Country/Region`,Lat,Long,"3/22/20")
+        NEw$`3/22/20`
+        Mapp<-uncount(NEw, `3/22/20`, .remove = TRUE, .id = NULL)
+        
+        leaflet(Mapp) %>%
+            addProviderTiles(providers$Esri.WorldStreetMap) %>% #adds map theme created by someone named Esri
+            addCircleMarkers(lng = ~Long, lat = ~Lat, color="red",popup = ~`Province/State`, clusterOptions = markerClusterOptions())%>%
+            setView(lat=37.0902, lng=-45.7129,zoom=2)
+        #   leaflet(Deaths) %>%
+        # addProviderTiles(providers$Esri.WorldStreetMap) %>% 
+        # addCircleMarkers(lng = ~Long, lat = ~Lat, color="red",popup = ~`Province/State`) %>%
+        #   setView(lat=37.0902, lng=-45.7129,zoom=2)
+        
+    })
+    
+    output$table1 <- DT::renderDataTable(
+        {
+            All <- Complete%>% filter(Confirmed >0)%>% filter(Date < "2020-03-23") %>% arrange(desc(Deaths)) %>%mutate(`Active Cases` = Confirmed-(Deaths+Recovered))%>% select(`Province/State`,`Country/Region`,Date, Confirmed, Deaths,Recovered,`Active Cases`) %>%
+                DT::datatable(filter = 'top', options = list(
+                    pageLength = 10, autoWidth = TRUE,sDom  = '<"top">lrt<"bottom">ip',class = 'cell-border stripe'
+                ),caption = 'Table 1: Confirms Deaths and Recoveries for all Countries once first case was Confirmed.')
+            All
+            
+        })
+    
+    output$plot1<-renderPlotly({
+        ape<- ggplot(Plottime, aes(x=Date))+ggtitle("World Cases as of March 21st ")+labs(x="Date (by day)")+
+            geom_line(aes(y =Confirmed, colour = "Confirmed")) + geom_point(aes(y =Confirmed, colour = "Confirmed"))+
+            geom_line(aes(y =Recovered, colour="Recovered")) +geom_point(aes(y =Recovered, colour="Recovered"))+
+            geom_line(aes(y =Deaths, colour="Deaths"))+geom_point(aes(y =Deaths, colour="Deaths"))+
+            scale_colour_manual(name  ="Type of Case", 
+                                breaks = c("Confirmed", "Recovered","Deaths"),
+                                values = c("blue","red", "green"))
+        ape<- ggplotly(ape)
+        ape
+        
+    })
+    output$table <- DT::renderDataTable(
+        {
+            two <- USA %>%filter(date<"2020-03-22")%>% select(date,state,cases,deaths)%>%arrange(desc(date)) %>%
+                DT::datatable(colnames = c('Date', 'State', 'Confirms', 'Deaths'),filter = 'top', options = list(
+                    pageLength = 10, autoWidth = TRUE,sDom  = '<"top">lrt<"bottom">ip',class = 'cell-border stripe'
+                ),caption = 'Table 2: Where Each State/territory Stands as of March 21st, 2020 Sorted by Date')
+            
+            
+            two
+            
+            
+        })
+    output$usamap<-renderPlot({
+        map_ab <- ggplot() + geom_map(data=states, map=states,
+                                      aes(x=long, y=lat, map_id=region),
+                                      fill="#ffffff", color="#ffffff", size=0.15) + 
+            geom_map(data=USA3, map= states,
+                     aes(fill=cases, map_id=region),
+                     color="#ffffff", size=0.15) + 
+            scale_fill_continuous(low='thistle2', high='#0072B2', 
+                                  guide='colorbar') +
+            theme_bw()  + labs(fill = "Number of Cases" 
+                               ,title = "", x="", y="") + geom_text(data=snames, aes(long,lat,label=cases))
+        map_ab <- map_ab + scale_y_continuous(breaks=c()) + scale_x_continuous(breaks=c()) + theme(panel.border =  element_blank())
+        map_ab
+    })
+    
+}
+shinyApp(ui, server)
