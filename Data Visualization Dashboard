@@ -1,0 +1,82 @@
+---
+title: "Top Hallowen Candies"
+author: "Brad Rechtzigel"
+output: flexdashboard::flex_dashboard
+---
+    
+    ```{r setup, include=FALSE}
+library(flexdashboard)
+library(ggplot2)
+library(dplyr)
+library(ggthemes)
+
+```
+
+
+```{r, include=FALSE}
+Candy <- read.csv("candy-data.csv")
+Candy[,-1] <- round(Candy[,-1],2)
+Candy$sugarpercent <- Candy$sugarpercent *100
+Candy$pricepercent <- Candy$pricepercent *100
+#Candy$winpercent <- Candy$winpercent / 100
+Candy1 <- Candy %>% select(2:10)
+# make sure that these are booleans (logical)
+Candy1[] <- lapply(Candy1, as.logical)
+
+
+```
+
+
+Column {data-width=450}
+-------------------------------------
+
+###  More Sugar = More $
+
+```{r}
+library(plotly)
+p <- ggplot(data = Candy,aes (x = sugarpercent, 
+                                 y = pricepercent, label= competitorname)) +
+    geom_point() + # then add a layer of points
+    geom_smooth(method = "lm")+ # and then add a fitted line
+    xlab("Sugar Percentile") + 
+  ylab("Price Percentile") +
+    theme_stata()
+ggplotly(p)
+
+```   
+
+
+###  Most Candies Tend To Be Soft and Caramel Free
+
+```{r}
+a<- ggplot(Candy1, aes(x = hard,
+                          fill = caramel # map the fill color to caramel           
+                         )) + # set up the plot
+    geom_bar(position = "dodge") + # add the barpot
+    coord_cartesian(ylim = c(0,60)) +
+    xlab("Hard Candy")+
+    ylab ("Count")+
+    facet_wrap(c("caramel")) +# put each level of "caramel" in a different facet
+    theme_stata()
+ggplotly(a)
+```
+
+Column {data-width=550}
+-------------------------------------
+
+### Top Halloween Candies {data-width=450}
+
+```{r}
+library(DT)
+Candy %>% 
+  rename(
+    Candy_Name = competitorname,
+    Win_Percentage_Vs_Others = winpercent,
+    Price_Percentage_Realtive_To_Most_Expensive = pricepercent) %>%
+  arrange(desc(Win_Percentage_Vs_Others)) %>% 
+  head(100) %>% 
+  select(Candy_Name,Win_Percentage_Vs_Others,Price_Percentage_Realtive_To_Most_Expensive) %>% 
+  DT::datatable()
+```   
+
+### FiveThirtyEight. (2017, October 31). The Ultimate Halloween Candy Power Ranking. Retrieved February 4, 2020, from https://www.kaggle.com/fivethirtyeight/the-ultimate-halloween-candy-power-ranking {data-height=1}
