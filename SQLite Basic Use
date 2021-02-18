@@ -1,0 +1,169 @@
+---
+title: Money, It’s a Hit'
+author: "STAT 345"
+output: html_document
+---
+
+We will use the package `RSQLite`, which not only provides an R interface but also installs a minimal library for database access.
+
+We will look trends in baseball team payrolls between the years 1985 and 2010. The data come
+from the Baseball Databank [http://baseball-databank.org](http://baseball-databank.org) and is based in part on Lahman’s Baseball Database. Information on the attributes in the database can be found at [http://baseball1.com/files/database/readme58.txt](http://baseball1.com/files/database/readme58.txt). You will need to download the SQLite database file `baseball.db` from D2L to your computer.
+
+1. Install the R packages that you'd like to use. 
+
+```{r}
+#install.packages("esquisse")
+#install.packages("DBI")
+#install.packages("RSQLite")
+#install.packages("plyr")
+#install.packages("dplyr")
+#library(DBI)
+#library(RSQLite)
+#library(plyr)
+#library(dplyr)
+```
+
+2. Here we will import payroll data from the database.
+    a. Set up a connection to the SQLite database stored in `baseball.db`. List the tables in the database.
+    
+```{r}
+drv = dbDriver("SQLite")
+con = dbConnect(drv, dbname="baseball.db")
+dbListTables(conn = con)
+Salary <- data.frame(dbReadTable(con, "Salaries"))
+head(Salary)
+```
+    
+ b. Use the table that contains salaries and compute the payroll for each team in 2010. Grab the entirety of the table, and compute the payrolls using base R commands. Which teams had the highest payrolls?
+    
+```{r}
+
+ Payroll <- aggregate(Salary$salary, by=list(year=Salary$yearID,team=Salary$teamID), FUN=sum)
+ ab <-Payroll[Payroll$year==2010,]
+ ab
+head(ab[order(ab$x, decreasing = TRUE),])
+#The 1.Yankees 2.Boston Redsox 3.Chicago Cubs 4. Philadelphia Phillies
+```
+    
+    c. Repeat the previous step, but now do this using only `dbGetQuery()` and/or `dplyr` commands and SQL. Verify that your answers are identical to problem 2b.
+    
+```{r}
+Salary%>% filter(yearID == 2010)%>%group_by(teamID) %>% summarise(sum.pay = sum(salary)) %>% arrange(desc(sum.pay)) %>% head(10)
+#The 1.Yankees 2.Boston Redsox 3.Chicago Cubs 4. Philadelphia Phillies They match
+
+```
+    
+    d. Modify the previous step to compute the payroll for each team for each year from 1985 to 2010.
+    
+```{r}
+
+Salary%>% filter(yearID <= 2010)%>% filter(yearID >= 1985) %>% group_by(teamID,yearID)%>% summarise(sum.pay1= sum(salary)) %>% arrange(desc(sum.pay1)) %>% head(8)
+TeamSpending <- Salary%>% filter(yearID <= 2010)%>% filter(yearID >= 1985) %>% group_by(teamID,yearID)%>% summarise(sum.pay1= sum(salary))
+
+
+#The Yankees have the top 7 highest
+
+```
+    
+3. Visualize the change in payrolls over time. To do this sensibly, one needs to adjust for inflation. The following code snippet gets price levels (CPI, consumer price index) from FRED (the Federal Reserve Economic Data service).
+```
+library(fImport)
+cpi <- fredSeries("CPIAUCSL",
+          from = as.Date("1985-01-01"),
+          to = as.Date("2011-01-01"))
+cpi <- cpi[months(as.Date(rownames(cpi))) == "January"]
+cpi <- cpi / cpi[length(cpi)]
+```
+The CPI is measured monthly, but salaries are annual, so we arbitrarily take the price level each January as the level for the whole year. The end result is a vector, `cpi`, containing consumer price indices from 1985 to 2011, normalized so that 1 = $1 in 2011. An expression like `y <- x/cpi[1990-1985+1]` will convert x 1990 dollars into y 2011 dollars.
+    a. Plot the CPI as a function of time. Make sure that the horizontal axis is labeled with years, not the positions along the vector.
+```{r}
+install.packages("fImport")
+library(fImport)
+cpi <- fredSeries("CPIAUCSL",
+          from = as.Date("1985-01-01"),
+          to = as.Date("2011-01-01"))
+cpi <- cpi[months(as.Date(rownames(cpi))) == "January"]
+cpi <- cpi / cpi[length(cpi)]
+cpi
+plot(1985:2011, cpi, xlab= "Years", main= "CPI as a function of time")
+```
+    
+    
+    b. Calculate the inflation-adjusted payroll of each baseball team over time. 
+    
+```{r}
+y <- TeamSpending$sum.pay1/cpi[TeamSpending$yearID-1985+1]
+y
+head(TeamSpending)
+TeamSpending <- data.frame(TeamSpending, y)
+```
+    
+    c. Plot the inflation-adjusted payroll of each team over time. (There are many ways to do this, including for loops, matplot, ggplot, etc.)
+    
+```{r}
+
+library(ggplot2)
+
+library(esquisse)
+#esquisser()
+library(ggplot2)
+
+ggplot(data = TeamSpending) +
+  aes(x = yearID, y = y) +
+  geom_point(color = "#0c4c8a") +
+  theme_minimal() +
+  facet_wrap(vars(teamID))
+```
+    
+    d. Plot the logarithm of inflation-adjusted payrolls over time.
+    
+```{r}
+LogofY <-log(TeamSpending$y)
+#All Teams Combined
+TeamSpending <- data.frame(TeamSpending, LogofY)
+ggplot(data = TeamSpending) +
+  aes(x = yearID, y = LogofY) +
+  geom_point(color = "#0c4c8a") +
+  theme_minimal() 
+
+```
+    
+    
+    e. Have payrolls generally kept up with inflation, outpaced it, or fallen behind? Are there teams or groups of teams whose payrolls have consistently been higher than the others? By what factor has the gap between the highest and the lowest payrolls grown (or shrunk) over time?
+```{r}
+#Teams seperated
+ggplot(data = TeamSpending) +
+  aes(x = yearID, y = y) +
+  geom_point(color = "#0c4c8a") +
+  theme_minimal() +
+  facet_wrap(vars(teamID))
+
+
+TeamSpending1 <- Salary%>% filter(yearID == 1985) %>% group_by(teamID)%>% summarise(sum.pay1= sum(salary))
+TeamSpending2 <- Salary%>% filter(yearID == 2010) %>% group_by(teamID)%>% summarise(sum.pay1= sum(salary))
+Factor1985 <- max(TeamSpending1$sum.pay1)- min(TeamSpending1$sum.pay1)
+Factor2010 <-max(TeamSpending2$sum.pay1)- min(TeamSpending2$sum.pay1)
+
+OverallFac <- Factor2010 / Factor1985
+
+#Payrolls seemed to have outpaced inflation after around 1990. The log seems to keep increasing and not just go straight across.
+#CHN, NYA, BOS #NYN seems to be the group higher than most. The factor is 16 times as large
+```
+
+4. Expand your SQL query to also retrieve the number of games played, and the number
+of games won, by each team each year. Create a scatter-plot of the proportion of games won against
+the inflation-adjusted payroll.
+
+```{r}
+Winslosses <- data.frame(dbReadTable(con, "Teams"))
+head(Winslosses)
+
+WL <- Winslosses %>% filter(yearID >= 1985) %>% filter(yearID <= 2011) %>% group_by(teamID, yearID) %>% select(G,W, teamID, yearID) %>% summarise(win1 = sum(W)/sum(G))
+head(WL)
+WinsRatio <- WL$win1
+WinsRatio
+plot(y,WinsRatio, xlab = "Inflation Adjusted Payroll", main = "Proportion of games won against inflation adjusted payroll")
+length(y)
+
+```
+
