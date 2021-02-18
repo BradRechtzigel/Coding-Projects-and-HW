@@ -1,0 +1,222 @@
+---
+title: "Data Cleaning"
+author: "Brad Rechtzigel"
+date: "2/12/2020"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE,warnings=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=FALSE}
+library(pdftools)
+library(stringr)
+
+#Extremeley messy
+
+heights <- pdf_text("heights.pdf")
+heights <- str_split(heights, "\r\n")
+
+names <- heights[[1]][1]
+
+heights2 <- heights[[1]][2:43]
+
+
+```
+
+
+```{r, echo=FALSE,include=FALSE}
+library(stringr)
+library(tidyverse)
+
+##FIGURING IT OUT
+names <- names %>%
+  str_trim() %>%
+  str_replace_all(",\\s.", "") %>%
+  str_split("\\s{2,}", simplify = TRUE)
+#names
+
+##FIXING THE FIRST PAGE 
+
+useful2 <- heights2 %>%
+  str_trim %>%
+  str_split("\\s{1,}", simplify = TRUE) %>%
+  data.frame(stringsAsFactors = FALSE) %>%
+  unite("x", X1:X2) %>%
+  setNames(names) 
+  #useful2
+  
+```
+
+
+```{r, echo=FALSE,include=FALSE}
+
+dump_list<-list(NULL)
+
+  for(i in 2:27){
+  useful <- heights[[i]] %>%
+  str_trim %>%
+  str_split("\\s{1,}", simplify = TRUE) %>%
+  data.frame(stringsAsFactors = FALSE) %>%
+  unite("x", X1:X2) %>%
+ setNames(names)
+  
+dump_list[[i-1]]<-useful 
+}
+
+#Part two function to fix all the pages after the first
+dump_list2<-list(NULL)
+
+  for(i in 2:27){
+  ab <-  heights[[i]] %>%
+  str_extract("ale.+_") %>%
+  str_replace_all("ale", "") %>%
+ str_replace_all("\\w{1,25}_$", "") %>%
+ str_trim() %>%
+data.frame(stringsAsFactors = FALSE)
+  
+dump_list2[[i-1]]<-ab 
+  }
+
+dump_list3<-list(NULL)
+
+  for(i in 2:27){
+  new <- 
+  heights[[i]] %>%
+  str_extract("[:alpha:]{1,20}_[:alpha:]{1,20}") %>%
+  data.frame(stringsAsFactors = FALSE)
+  
+dump_list3[[i-1]]<-new
+  }
+
+
+#big_data <- dplyr::bind_rows(dump_list)
+big_data <- data.table::rbindlist(dump_list,fill=TRUE)
+
+newdata3 <- data.table::rbindlist(dump_list2,fill=TRUE)
+newdata4 <- data.table::rbindlist(dump_list3,fill=TRUE)
+
+big_data <- big_data[,1:2]
+big_data <- cbind(big_data,newdata3,newdata4)
+#149,#255,#276,#513,#563 #648 #717, 821, 853,868,869,943,1053
+```
+
+
+
+```{r, echo=FALSE,include=FALSE}
+names(big_data) <- c("time_stamp", "sex","height", "student_IDs")
+big_data2 <-  rbind(useful2,big_data,fill=T)
+big_data2
+big_data2[22,3] <- "64"
+big_data2[22,4] <- "pugnacious_kestrel"
+
+big_data2 <- big_data2[,1:4]
+
+#names(big_data2) <- c("time_stamp", "sex","height", "student_IDs","e", "f","g", "h")
+#head(big_data2)
+
+
+big_data3 <-  big_data2%>% as_tibble()%>% dplyr::filter(row_number() %% 43 != 42) ## Delete every 3rd row starting from 1
+big_data3 <- big_data3[1:1095,1:4] # Remove last extra row and only take the four useful columns
+
+trial <- big_data3
+
+big_data4 <- big_data3
+#Practice before doing on data
+#fruits <- c("one apple", "two*pears  ", "three bananas.")
+#str_replace(fruits, "\\*", "")
+#trimws(fruits)
+
+#Clean the data heights
+big_data4$height <- str_replace(big_data4$height, "5 feet", "5\'")
+big_data4$height <- str_replace(big_data4$height, "5 ft", "5\'")
+big_data4$height <- str_replace(big_data4$height, "5ft", "5\'")
+big_data4$height <- str_replace(big_data4$height, "five foot", "5'")
+big_data4$height <- str_replace(big_data4$height, "Fivefoot ", "5'")
+big_data4$height <- str_replace(big_data4$height, "inches", "\"")
+big_data4$height <- str_replace(big_data4$height, "\'", "\\.")
+big_data4$height <- str_replace(big_data4$height, "\''$", "")
+
+big_data4$height <- str_replace(big_data4$height, "\"", "")
+big_data4$height <- str_replace(big_data4$height, " ", "")
+big_data4$height <- str_replace(big_data4$height, ">", "")
+big_data4$height <- str_replace(big_data4$height, "\\.$", "")
+big_data4$height <- str_replace(big_data4$height, "cm", "")
+big_data4$height <- str_replace(big_data4$height, "eight", "8")
+big_data4$height <- str_replace(big_data4$height, "and ", "")
+
+big_data4$height <- trimws(big_data4$height)
+
+```
+
+#convert heights to the same measurement
+
+```{r, echo=FALSE,include=FALSE}
+big_data4 <- big_data4 %>% 
+  mutate(height = recode(height, 
+                          `4.10` = "58",
+                          `4.11` = "59",
+                          `5` =  "60",
+                          `5.1` = "61",
+                          `5.2` = "62",
+                          `5.25` = "63",
+                          `5.3` = "63",
+                          `5,3` = "63",
+                          `5.4` = "64",
+                          `5,4` = "64",
+                          `5.5` = "65",
+                          `5.51` = "66.12",
+                          `5.57` = "66.84",
+                          `5.6` =  "66",
+                          `5.69` =  "68.28",
+                          `5.7` = "67",
+                          `5.75` = "69",
+                          `5.8` = "68",
+                          `5,8` = "68",
+                          `5.8.11` = "68",
+                          `5.9` = "69",
+                          `5.10` =  "70",
+                          `5.11` = "71",
+                          `511` = "71",
+                          `5.12` = "70",
+                          `6` = "72",
+                          `6.1` = "73",
+                          `6.2` = "74",
+                          `6.3` = "75",
+                          `6.4` = "76",
+                          `6.5` = "77",
+                          `6.6` =  "78",
+                          `6.7` = "79",
+                          `6.8` = "80",
+                          `6,8` = "80",
+                          `6.9` = "81",
+                          `6.10` =  "82",
+                          `6.11` = "83",
+                          `5.7.5` = "67.5",
+                          `6*12` = "72",
+                          `7` = "84",
+                          `5' 7.78"` = "67",
+                           `1,70` = "170"
+                          ))
+big_data4$height <- as.character(big_data4$height)
+big_data4$height <- as.numeric(big_data4$height)
+which(is.na(big_data4$height))
+#Those either are letters or super huge non useful numbers anyway ^
+
+```
+
+
+```{r, echo=FALSE}
+#Convert anything within 120 to 244 from cm to inches, convert anything from 1.2 to 2.4 from meters to inches Remove heights below 30 and above 90
+big_data4$height <- ifelse (big_data4$height >120 & big_data4$height< 244, big_data4$height/2.54,big_data4$height)
+
+big_data4$height <- ifelse (big_data4$height >1.2 & big_data4$height< 2.4, big_data4$height*39.37,big_data4$height)
+
+big_data4$height <- ifelse (big_data4$height <30 | big_data4$height> 90, NA, big_data4$height)
+
+```
